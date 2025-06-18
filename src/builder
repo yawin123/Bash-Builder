@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+source utils/help.sh
+
+help.description "Utility to bundle bash scripts"
+
+help.add_option "-h       " "Print this help menu"
+help.add_option "-e <path>" "The entrypoint  to the bash script to bundle"
+help.add_option "-o <path>" "The output file to write to"
+help.add_option "-m       " "Minify the output file (default: false)"
+
+declare -A included_files
+
+function bundle_script() {
+    local file="$1"
+
+    # Evita incluir el mismo archivo más de una vez
+    if [[ -n "${included_files[$file]}" ]]; then
+        echo "# [SKIPPED] $file ya fue incluido"
+        return
+    fi
+
+    included_files["$file"]=1
+
+    echo "# === BEGIN $file ==="
+    keyword="s""ource"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" =~ ^[[:space:]]*($keyword|\.)[[:space:]]+([^ ]+) ]]; then
+        local src_file="${BASH_REMATCH[2]}"
+        local dir="$(dirname "$file")"
+        local full_path="$(realpath "$dir/$src_file")"
+        bundle_script "$full_path"
+      else
+        echo "$line"
+      fi
+
+    done < "$file"
+    echo "# === END $file ==="
+}
+
+#------------------#
+# Evaluate options #
+#------------------#
+ENTRY=${ENTRY:-}
+OUTPUT=${OUTPUT:-}
+MINIFY=${MINIFY:-0}
+
+while getopts :he:o:m opt; do
+  case $opt in
+    h)
+      help.show
+      exit 0
+      ;;
+    e) ENTRY=${OPTARG:-$ENTRY} ;;
+    o) OUTPUT=${OPTARG:-$OUTPUT} ;;
+    m) MINIFY=1 ;;
+
+    # Errors
+    ?)
+      printf "$RED[!]$RESET $(basename $0): illegal option -- $OPTARG\n\n"
+      help.show
+      exit 1
+      ;;
+    :)
+      printf "$RED[!]$RESET $(basename $0): option requires an argument -- $OPTARG\n\n"
+      help.show
+      exit 1
+      ;;
+  esac
+done
+
+# Uso: ./bash_packer.sh script_principal.sh > script_empaquetado.sh
+main_script="$(realpath "$ENTRY")"
+out_script="$(realpath "$OUTPUT")"
+
+
+if [[ ! -f "$main_script" ]]; then
+  error.log "Fichero de entrada no indicado o no válido"
+  exit 2
+fi
+if [[ -z $out_script ]]; then
+  error.log "Fichero de salida no indicado o no válido"
+  exit 3
+fi
+
+bundle_script "$main_script" > $out_script
+
+if [[ $MINIFY -eq 1 ]]; then
+  bash_bundler bundle -m -e $out_script -o $out_script
+fi
