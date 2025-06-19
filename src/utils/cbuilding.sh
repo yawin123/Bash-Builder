@@ -4,9 +4,11 @@ source datastore.sh
 source tools.sh
 
 data.set "linux" "./linux"
+data.set "linux" ""
 data.set "linux" ".so"
 
 data.set "windows" "./windows"
+data.set "windows" ".exe"
 data.set "windows" ".dll"
 data.set "windows" ".dll.a"
 

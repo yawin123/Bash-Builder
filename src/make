@@ -8,18 +8,22 @@ source utils/tools.sh
 
 PLATFORM="linux"
 FRESH=0
+DEPENDENCIES=()
+DEP_FRESH=0
 
 help.description "Herramienta para compilar $PROJECT_NAME para las diferentes plataformas para las que esté configurada la compilación"
+help.add_option "-h           " "Muestra esta ayuda"
+help.add_option "-c           " "Limpia el directorio de compilación"
+help.add_option "-d <path>    " "Ruta a una dependencia que se debe compilar previamente"
+help.add_option "-f           " "Indica si se quiere recompilar las dependencias"
 help.add_option "-p <platform>" "Plataforma para la que compilar el proyecto"
-help.add_option "-h" "Muestra esta ayuda"
-help.add_option "-c" "Limpia el directorio de compilación"
-help.add_option "-r" "Recompila el proyecto"
+help.add_option "-r           " "Recompila el proyecto"
 
 clean_folder() {
   cbuild.clean_all
 }
 
-while getopts :hp:cr opt; do
+while getopts :hp:crd:f opt; do
   case $opt in
     # General options
     h)
@@ -35,6 +39,12 @@ while getopts :hp:cr opt; do
       ;;
     r)
       FRESH=1
+      ;;
+    d)
+      DEPENDENCIES+=(${OPTARG})
+      ;;
+    f)
+      DEP_FRESH=1
       ;;
     # Errors
     ?)
@@ -53,6 +63,23 @@ done
 #------------#
 # Entrypoint #
 #------------#
+
+ARGS=" -p $PLATFORM"
+if [[ "$DEP_FRESH" == "1" ]]; then
+  ARGS=" -r $ARGS"
+fi
+
+PROJECT_FOLDER=$(pwd)
+
+for dep in "${DEPENDENCIES[@]}"; do
+  if [[ ! -f $dep/bin/make ]]; then
+      error.log "La dependencia $dep no es válida"
+      exit 1
+  fi
+
+  cd $dep/bin && ./make $ARGS
+  cd $PROJECT_FOLDER
+done
 
 cbuild.set_project $PROJECT_NAME
 
