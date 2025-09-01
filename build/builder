@@ -95,7 +95,8 @@ echo
 fi
 done
 }
-help.description "Utility to bundle bash scripts"
+BB_VERSION=1.0.1
+help.description "Bash Builder (v$BB_VERSION)\n-----------------------------------\nAuthor: Miguel Albors Iruretagoyena\nSource: https://git.yawin.es/personal/bash-builder\nLicense: GNU GPLv3\n\nUtility to bundle bash scripts"
 help.add_option "-h       " "Print this help menu"
 help.add_option "-e <path>" "The entrypoint  to the bash script to bundle"
 help.add_option "-o <path>" "The output file to write to"
