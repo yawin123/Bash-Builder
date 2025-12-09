@@ -37,8 +37,11 @@ help.add_option() {
 }
 
 # Función para mostrar la ayuda
-help.show() {
+help.show_description() {
   printf "$HELP_DESCRIPTION\n\n"
+}
+help.show() {
+  help.show_description
   printf "${GREEN}Usage:$RESET $CYAN$(basename $0) [OPTIONS]$RESET\n\n"
 
   # Mostrar primero el tipo "General"

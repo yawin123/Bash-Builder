@@ -39,6 +39,6 @@ function info.log { message "$GREEN$1$RESET"; }
 function debug.log { message "$BLUE$1$RESET"; }
 
 error() {
-  error.log "Error\n" "--"
+  error.log "Error: $1"
   exit 1
 }
