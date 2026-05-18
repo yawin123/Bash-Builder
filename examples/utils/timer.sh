@@ -7,7 +7,7 @@ source tools.sh
 #|-/ /-| Timer utils |-/ /-|#
 #|/ /--+-------------+/ /--|#
 
-safe_export --name TIMER_CHRONO
+safe_declare --name TIMER_CHRONO
 
 timer.start() {
   TIMER_CHRONO=$EPOCHREALTIME

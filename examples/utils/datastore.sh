@@ -3,7 +3,7 @@
 #|-/ /-| Datastore utility |-/ /-|#
 #|/ /--+-------------------+/ /--|#
 
-declare -A datos
+safe_declare --name datos --assoc
 
 data.set() {
     local clave=$1

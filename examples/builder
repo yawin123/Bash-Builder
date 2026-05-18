@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+source utils/tools.sh
 source utils/help.sh
 source utils/minify.sh
 
@@ -11,25 +12,25 @@ help.add_option "-e <path>" "The entrypoint  to the bash script to bundle"
 help.add_option "-o <path>" "The output file to write to"
 help.add_option "-m       " "Minify the output file (default: false)"
 
-declare -A included_files
+safe_declare --name included_files --assoc
 
-# Shebang que irá al principio absoluto de la salida.
-# Se extrae del entrypoint; si no tiene, se tomará el primero que aparezca.
+# The Shebang that will go at the absolute beginning of the output.
+# It is extracted from the entrypoint; if it doesn't have one, the first one found will be used.
 SHEBANG_LINE=""
 SHEBANG_PRINTED=false
 
 function bundle_script() {
     local file="$1"
 
-    # Evita incluir el mismo archivo más de una vez
+    # Avoid including the same file more than once
     if [[ -n "${included_files[$file]}" ]]; then
-        echo "# [SKIPPED] $file ya fue incluido"
+        echo "# [SKIPPED] $file already included"
         return
     fi
 
     included_files["$file"]=1
 
-    # Emitir el shebang antes del primer BEGIN, una sola vez
+    # Emit the shebang before the first BEGIN, only once
     if ! $SHEBANG_PRINTED; then
         SHEBANG_PRINTED=true
         if [[ -n "$SHEBANG_LINE" ]]; then
@@ -46,9 +47,9 @@ function bundle_script() {
         local full_path="$(realpath "$dir/$src_file")"
         bundle_script "$full_path"
       else
-        # Descartar todos los shebangs: el primero ya va al inicio
+        # Discard all shebangs: the first one goes at the beginning
         if [[ "$line" =~ ^[[:space:]]*#!/ ]]; then
-          # Si aún no teníamos shebang, registrar este
+          # If we didn't have a shebang yet, register this one
           [[ -z "$SHEBANG_LINE" ]] && SHEBANG_LINE="$line"
           continue
         fi
@@ -90,31 +91,32 @@ while getopts :he:o:m opt; do
   esac
 done
 
-# Uso: ./bash_packer.sh script_principal.sh > script_empaquetado.sh
+# Usage: ./builder -e main_script.sh -o bundled_script.sh
 main_script="$(realpath "$ENTRY")"
 out_script="$(realpath "$OUTPUT")"
 
 
 if [[ ! -f "$main_script" ]]; then
-  error.log "Fichero de entrada no indicado o no válido"
+  error.log "Input file not specified or invalid"
   exit 2
 fi
 if [[ -z $out_script ]]; then
-  error.log "Fichero de salida no indicado o no válido"
+  error.log "Output file not specified or invalid"
   exit 3
 fi
 
-# Extraer el shebang de la primera línea del entrypoint para colocarlo
-# al principio absoluto de la salida, antes de cualquier marcador.
+# Extract the shebang from the first line of the entrypoint to place it
+# at the absolute beginning of the output, before any marker.
 if IFS= read -r first_line < "$main_script" && [[ "$first_line" =~ ^#!/ ]]; then
   SHEBANG_LINE="$first_line"
 fi
 
+message "$BLUE Building:$RESET $main_script"
 bundle_script "$main_script" > $out_script
 
-# Caso borde: el entrypoint no tenía shebang pero un script fuente sí.
-# SHEBANG_LINE se capturó durante el bundling pero no se imprimió al
-# inicio. Lo anteponemos ahora para que la salida empiece por el shebang.
+# Edge case: the entrypoint did not have a shebang but a source script did.
+# SHEBANG_LINE was captured during bundling but not printed at the
+# beginning. We prepend it now so that the output starts with the shebang.
 if [[ -n "$SHEBANG_LINE" ]]; then
   read -r output_first_line < "$out_script"
   if [[ ! "$output_first_line" =~ ^#!/ ]]; then
@@ -126,7 +128,8 @@ if [[ -n "$SHEBANG_LINE" ]]; then
 fi
 
 if [[ $MINIFY -eq 1 ]]; then
-  info.log "Minificando $out_script..."
+  message "$BLUE Minifying:$RESET $out_script"
   minify.file "$out_script" "$out_script"
-  info.log "Minificado completado"
 fi
+
+info.log "Completed successfully!"

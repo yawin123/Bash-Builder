@@ -8,15 +8,15 @@ source log.sh
 #|/ /--+--------------+/ /--|#
 
 help.description() {
-  safe_export --name HELP_DESCRIPTION --default "$1"
+  safe_declare --name HELP_DESCRIPTION --default "$1"
 }
 
 # Diccionario de tipos a listas de claves de opciones
-declare -A HELP_TYPES
+safe_declare --name HELP_TYPES --assoc
 # Diccionario de opciones: clave -> comando
-declare -A HELP_COMMANDS
+safe_declare --name HELP_COMMANDS --assoc
 # Diccionario de opciones: clave -> descripción
-declare -A HELP_DESCRIPTIONS
+safe_declare --name HELP_DESCRIPTIONS --assoc
 
 # Contador para generar claves únicas
 HELP_INDEX=0

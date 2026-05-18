@@ -93,7 +93,7 @@ La salida minificada es sintácticamente equivalente al original. Reducciones ob
 | Ejemplo | Normal | Minificado | Reducción |
 |---|---|---|---|
 | `listar.sh` | 320 líneas | 220 líneas | ~31% |
-| `builder` | 397 líneas | 240 líneas | ~39% |
+| `builder` | 434 líneas | 266 líneas | ~39% |
 
 ---
 

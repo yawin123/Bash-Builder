@@ -8,12 +8,12 @@ source tools.sh
 #|/ /--+---------------+/ /--|#
 
 # Configuración dinámica
-safe_export --name SUMMARY_HEADERS        --array
-safe_export --name SUMMARY_ROWS           --array
-safe_export --name SUMMARY_COL_WIDTHS     --array
-safe_export --name SUMMARY_COL_FILL_CHAR  --array
-safe_export --name SUMMARY_NUM_COLS       --default 0
-safe_export --name SUMMARY_SHOW_HEADER    --default 1
+safe_declare --name SUMMARY_HEADERS        --array
+safe_declare --name SUMMARY_ROWS           --array
+safe_declare --name SUMMARY_COL_WIDTHS     --array
+safe_declare --name SUMMARY_COL_FILL_CHAR  --array
+safe_declare --name SUMMARY_NUM_COLS       --default 0
+safe_declare --name SUMMARY_SHOW_HEADER    --default 1
 
 # Función para configurar la tabla
 function summary.setup {
