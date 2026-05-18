@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 source utils/help.sh
+source utils/minify.sh
 
 BB_VERSION=1.0.1
 help.description "Bash Builder (v$BB_VERSION)\n-----------------------------------\nAuthor: Miguel Albors Iruretagoyena\nSource: https://git.yawin.es/personal/bash-builder\nLicense: GNU GPLv3\n\nUtility to bundle bash scripts"
@@ -11,6 +12,11 @@ help.add_option "-o <path>" "The output file to write to"
 help.add_option "-m       " "Minify the output file (default: false)"
 
 declare -A included_files
+
+# Shebang que irá al principio absoluto de la salida.
+# Se extrae del entrypoint; si no tiene, se tomará el primero que aparezca.
+SHEBANG_LINE=""
+SHEBANG_PRINTED=false
 
 function bundle_script() {
     local file="$1"
@@ -23,6 +29,14 @@ function bundle_script() {
 
     included_files["$file"]=1
 
+    # Emitir el shebang antes del primer BEGIN, una sola vez
+    if ! $SHEBANG_PRINTED; then
+        SHEBANG_PRINTED=true
+        if [[ -n "$SHEBANG_LINE" ]]; then
+            echo "$SHEBANG_LINE"
+        fi
+    fi
+
     echo "# === BEGIN $file ==="
     keyword="s""ource"
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -32,6 +46,12 @@ function bundle_script() {
         local full_path="$(realpath "$dir/$src_file")"
         bundle_script "$full_path"
       else
+        # Descartar todos los shebangs: el primero ya va al inicio
+        if [[ "$line" =~ ^[[:space:]]*#!/ ]]; then
+          # Si aún no teníamos shebang, registrar este
+          [[ -z "$SHEBANG_LINE" ]] && SHEBANG_LINE="$line"
+          continue
+        fi
         echo "$line"
       fi
 
@@ -84,8 +104,29 @@ if [[ -z $out_script ]]; then
   exit 3
 fi
 
+# Extraer el shebang de la primera línea del entrypoint para colocarlo
+# al principio absoluto de la salida, antes de cualquier marcador.
+if IFS= read -r first_line < "$main_script" && [[ "$first_line" =~ ^#!/ ]]; then
+  SHEBANG_LINE="$first_line"
+fi
+
 bundle_script "$main_script" > $out_script
 
+# Caso borde: el entrypoint no tenía shebang pero un script fuente sí.
+# SHEBANG_LINE se capturó durante el bundling pero no se imprimió al
+# inicio. Lo anteponemos ahora para que la salida empiece por el shebang.
+if [[ -n "$SHEBANG_LINE" ]]; then
+  read -r output_first_line < "$out_script"
+  if [[ ! "$output_first_line" =~ ^#!/ ]]; then
+    local tmp_header
+    tmp_header="$(mktemp)"
+    echo "$SHEBANG_LINE" | cat - "$out_script" > "$tmp_header"
+    mv "$tmp_header" "$out_script"
+  fi
+fi
+
 if [[ $MINIFY -eq 1 ]]; then
-  bash_bundler bundle -m -e $out_script -o $out_script
+  info.log "Minificando $out_script..."
+  minify.file "$out_script" "$out_script"
+  info.log "Minificado completado"
 fi

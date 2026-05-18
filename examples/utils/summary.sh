@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
+# Carga tools.sh de forma relativa al script actual
+source tools.sh
+
 #|--/ /+---------------+--/ /|#
 #|-/ /-| Summary utils |-/ /-|#
 #|/ /--+---------------+/ /--|#
-
-# Carga tools.sh de forma relativa (desarrollo) o desde PATH (compilado)
-source tools.sh
 
 # Configuración dinámica
 safe_export --name SUMMARY_HEADERS        --array
@@ -59,7 +59,7 @@ function summary.show {
     # Función auxiliar para imprimir una fila con padding
     summary.__show_row() {
         local -n fila=$1
-        local override_fill_char="$2"
+        local override_fill_char="${2:-}"
 
         printf " "
         for ((i=0; i<SUMMARY_NUM_COLS; i++)); do

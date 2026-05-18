@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-#|--/ /+--------------+--/ /|#
-#|-/ /-| Help utility |-/ /-|#
-#|/ /--+--------------+/ /--|#
 
 source tools.sh
 source log.sh
+
+#|--/ /+--------------+--/ /|#
+#|-/ /-| Help utility |-/ /-|#
+#|/ /--+--------------+/ /--|#
 
 help.description() {
   safe_export --name HELP_DESCRIPTION --default "$1"

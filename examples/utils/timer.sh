@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
+# Carga tools.sh de forma relativa al script actual
+source tools.sh
+
 #|--/ /+-------------+--/ /|#
 #|-/ /-| Timer utils |-/ /-|#
 #|/ /--+-------------+/ /--|#
-
-source tools.sh
 
 safe_export --name TIMER_CHRONO
 
