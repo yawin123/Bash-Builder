@@ -5,14 +5,14 @@ local default_value=""
 local is_array=false
 while [[ $# -gt 0 ]]; do
 case "$1" in
---name|-n) var_name="$2"; shift 2;;
---default|-d) default_value="$2"; shift 2;;
---array|-a) is_array=true; shift;;
-*) echo "Parámetro desconocido: $1" >&2; return 1;;
+--name|-n) var_name="$2"; shift 2 ;;
+--default|-d) default_value="$2"; shift 2 ;;
+--array|-a) is_array=true; shift ;;
+*) echo "Parámetro desconocido: $1" >&2; return 1 ;;
 esac
 done
-[[ -z "$var_name" ]]&&{ echo "Falta nombre de variable" >&2; return 1; }
-[[ -v $var_name ]]&&return
+[[ -z "$var_name" ]] && { echo "Falta nombre de variable" >&2; return 1; }
+[[ -v $var_name ]] && return
 if $is_array; then
 eval "export $var_name=($default_value)"
 else
@@ -25,15 +25,15 @@ local default_value=""
 local type_flag=""
 while [[ $# -gt 0 ]]; do
 case "$1" in
---name|-n) var_name="$2"; shift 2;;
---default|-d) default_value="$2"; shift 2;;
---array|-a) type_flag="-a"; shift;;
---assoc|-A) type_flag="-A"; shift;;
-*) echo "Parámetro desconocido: $1" >&2; return 1;;
+--name|-n) var_name="$2"; shift 2 ;;
+--default|-d) default_value="$2"; shift 2 ;;
+--array|-a) type_flag="-a"; shift ;;
+--assoc|-A) type_flag="-A"; shift ;;
+*) echo "Parámetro desconocido: $1" >&2; return 1 ;;
 esac
 done
-[[ -z "$var_name" ]]&&{ echo "Falta nombre de variable" >&2; return 1; }
-[[ -v $var_name ]]&&return
+[[ -z "$var_name" ]] && { echo "Falta nombre de variable" >&2; return 1; }
+[[ -v $var_name ]] && return
 if [[ "$type_flag" == "-a"||"$type_flag" == "-A" ]]; then
 if [[ -z "$default_value" ]]; then
 eval "declare -g $type_flag $var_name=()"
@@ -139,19 +139,19 @@ local lines=()
 local line trimmed
 while IFS= read -r line||[[ -n "$line" ]]; do
 lines+=("$line")
-if [[ -z "$shebang"&&"$line" =~ ^[[:space:]]*#!/ ]]; then
+if [[ -z "$shebang" && "$line" =~ ^[[:space:]]*#!/ ]]; then
 trimmed="${line#"${line%%[![:space:]]*}"}"
 shebang="$trimmed"
 fi
 done
-[[ -z "$shebang" ]]&&shebang="#!/bin/bash"
+[[ -z "$shebang" ]] && shebang="#!/bin/bash"
 printf '%s\n' "$shebang"
 for line in "${lines[@]}"; do
 trimmed="${line#"${line%%[![:space:]]*}"}"
 trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-[[ "$trimmed" =~ ^#!/ ]]&&continue
-[[ -z "$trimmed" ]]&&continue
-[[ "$trimmed" == "#"* ]]&&continue
+[[ "$trimmed" =~ ^#!/ ]] && continue
+[[ -z "$trimmed" ]] && continue
+[[ "$trimmed" == "#"* ]] && continue
 _squeeze_line "$trimmed"
 done
 }
@@ -161,12 +161,12 @@ printf '%s\n' "$1"|sed -E \
 -e 's/^function[[:space:]]+//' \
 -e 's/ \|\| /||/g' \
 -e 's/ \| /|/g' \
--e 's/&&/\&\&/g' \
+-e 's/ && /\&\&/g' \
 -e 's/ &&\b/\&\&/g' \
--e 's/\b&&/\&\&/g' \
--e 's/;/;/g' \
--e 's/;;/;;/g' \
--e 's/;;/;;/g' \
+-e 's/\b&& /\&\&/g' \
+-e 's/ ;/;/g' \
+-e 's/;; /;;/g' \
+-e 's/ ;;/;;/g' \
 -e 's/([0-9]?>>?)[[:space:]]+([^>])/\1\2/g' \
 -e 's/(<<<)[[:space:]]+/\1/g' \
 -e 's/[[:space:]]{2,}/ /g'
@@ -203,7 +203,7 @@ local full_path="$(realpath "$dir/$src_file")"
 bundle_script "$full_path"
 else
 if [[ "$line" =~ ^[[:space:]]*#!/ ]]; then
-[[ -z "$SHEBANG_LINE" ]]&&SHEBANG_LINE="$line"
+[[ -z "$SHEBANG_LINE" ]] && SHEBANG_LINE="$line"
 continue
 fi
 echo "$line"
@@ -220,9 +220,9 @@ h)
 help.show
 exit 0
 ;;
-e) ENTRY=${OPTARG:-$ENTRY};;
-o) OUTPUT=${OPTARG:-$OUTPUT};;
-m) MINIFY=1;;
+e) ENTRY=${OPTARG:-$ENTRY} ;;
+o) OUTPUT=${OPTARG:-$OUTPUT} ;;
+m) MINIFY=1 ;;
 ?)
 printf "$RED[!]$RESET $(basename $0): illegal option -- $OPTARG\n\n"
 help.show
@@ -245,7 +245,7 @@ if [[ -z $out_script ]]; then
 error.log "Output file not specified or invalid"
 exit 3
 fi
-if IFS= read -r first_line < "$main_script"&&[[ "$first_line" =~ ^#!/ ]]; then
+if IFS= read -r first_line < "$main_script" && [[ "$first_line" =~ ^#!/ ]]; then
 SHEBANG_LINE="$first_line"
 fi
 message "$BLUE Building:$RESET $main_script"

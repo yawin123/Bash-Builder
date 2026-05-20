@@ -1,0 +1,361 @@
+#!/bin/bash
+set -Euo pipefail
+
+source utils/log.sh
+source utils/help.sh
+source utils/summary.sh
+
+# =============================================================================
+# Script Inteligente de Actualización para Gentoo
+# Versión: 1.0
+# =============================================================================
+
+help.description "Actualización inteligente de Gentoo (v1.0)\nSoporta detección de cambios en USE flags, depclean y resumen de errores."
+help.add_option "-h" "Mostrar esta ayuda"
+
+# Configuración
+LOG_DIR="/var/log/gentoo-updates"
+LOG_FILE="${LOG_DIR}/update-$(date +%Y%m%d-%H%M%S).log"
+BACKUP_DIR="/var/backups/gentoo"
+WORLD_BACKUP="${BACKUP_DIR}/world-$(date +%Y%m%d).backup"
+
+safe_declare --name PROBLEMS_LIST --array
+
+# =============================================================================
+# LIMPIEZA DE ARCHIVOS TEMPORALES
+# =============================================================================
+CLEANUP_FILES=()
+
+cleanup() {
+    for f in "${CLEANUP_FILES[@]}"; do
+        if [ -f "$f" ]; then
+            rm -f "$f"
+            debug.log "Limpiado: $f"
+        fi
+    done
+    log.err "Script interrumpido"
+    exit 1
+}
+trap cleanup INT TERM
+
+sudo mkdir -p "$LOG_DIR" "$BACKUP_DIR"
+
+# =============================================================================
+# LOGGING CON ESCRITURA A FICHERO
+# =============================================================================
+_log_file() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1: $2" >> "$LOG_FILE"
+}
+log.info() { info.log "$*";  _log_file "INFO"  "$*"; }
+log.warn() { message "${YELLOW}[WARN] $*${RESET}"; _log_file "WARN"  "$*"; }
+log.err()  { error.log "$*"; _log_file "ERROR" "$*"; }
+
+# =============================================================================
+# FUNCIONES DE VERIFICACIÓN
+# =============================================================================
+check_disk_space() {
+    log.info "Verificando espacio en disco..."
+    local available
+    available=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
+
+    if [ "$available" -lt 10 ]; then
+        log.warn "Espacio crítico: solo ${available}GB disponibles en /"
+        read -p "¿Continuar? (y/N): " -n 1 -r
+        echo
+        [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+    else
+        log.info "Espacio disponible: ${available}GB"
+    fi
+}
+
+check_network() {
+    log.info "Verificando conectividad..."
+    if ping -c 2 gentoo.org > /dev/null 2>&1; then
+        log.info "Conectividad OK"
+        return 0
+    else
+        log.err "Sin conexión a internet"
+        return 1
+    fi
+}
+
+check_emerge_running() {
+    if pgrep -x "emerge" > /dev/null; then
+        log.warn "emerge ya está en ejecución"
+        return 0
+    fi
+    return 1
+}
+
+backup_world() {
+    log.info "Backup de world file..."
+    sudo cp /var/lib/portage/world "$WORLD_BACKUP"
+}
+
+# =============================================================================
+# FUNCIÓN DE ANÁLISIS DE ERRORES
+# =============================================================================
+analyze_and_collect_errors() {
+    local error_log="$1"
+
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "masked by:.*LICENSE"; then
+            local pkg license
+            pkg=$(echo "$line" | sed -n 's/^[[:space:]]*- \([^ ]*\) .*/\1/p')
+            license=$(echo "$line" | sed -n 's/.*LICENSE="\([^"]*\)".*/\1/p')
+            [ -n "$pkg" ] && PROBLEMS_LIST+=("$pkg | license changed: $license")
+
+        elif echo "$line" | grep -q "USE flag" || echo "$line" | grep -q "required by.*USE"; then
+            local pkg use_flag
+            pkg=$(echo "$line" | grep -oP '(?<=^ )[a-z0-9-]+/[a-z0-9-]+|[a-z0-9-]+/[a-z0-9-]+' | head -1)
+            use_flag=$(echo "$line" | grep -oP 'flag\s+\K[a-zA-Z0-9_+-]+' || echo "unknown")
+            [ -n "$pkg" ] && [ -n "$use_flag" ] && PROBLEMS_LIST+=("$pkg | use flag missing: $use_flag")
+
+        elif echo "$line" | grep -q "masked by:" && ! echo "$line" | grep -q "LICENSE"; then
+            local pkg reason
+            pkg=$(echo "$line" | sed -n 's/^[[:space:]]*- \([^ ]*\) .*/\1/p')
+            reason=$(echo "$line" | sed -n 's/.*masked by: \([^)]*)\).*/\1/p')
+            [ -n "$pkg" ] && PROBLEMS_LIST+=("$pkg | masked: $reason")
+
+        elif echo "$line" | grep -q "blocks" || echo "$line" | grep -q "blocked"; then
+            local pkg1 pkg2
+            pkg1=$(echo "$line" | grep -oP '[a-z0-9-]+/[a-z0-9-]+')
+            pkg2=$(echo "$line" | grep -oP 'blocks.*?([a-z0-9-]+/[a-z0-9-]+)')
+            [ -n "$pkg1" ] && [ -n "$pkg2" ] && PROBLEMS_LIST+=("$pkg1 | blocked by: $pkg2")
+
+        elif echo "$line" | grep -qi "fetch failed\|download.*failed"; then
+            local pkg
+            pkg=$(echo "$line" | grep -oP '(?<=for\s)[a-z0-9-]+/[a-z0-9-]+' | head -1)
+            [ -n "$pkg" ] && PROBLEMS_LIST+=("$pkg | fetch failed")
+        fi
+    done < "$error_log"
+}
+
+# =============================================================================
+# RESUMEN DE ERRORES
+# =============================================================================
+print_sinthetic_summary() {
+    echo
+    message "${CYAN}RESUMEN DE ERRORES${RESET}"
+    echo
+
+    if [ ${#PROBLEMS_LIST[@]} -eq 0 ]; then
+        info.log "No se detectaron errores - Todo correcto"
+        return
+    fi
+
+    summary.setup "Paquete:35: " "Tipo de error:40: "
+    for problem in "${PROBLEMS_LIST[@]}"; do
+        local pkg tipo
+        pkg=$(echo "$problem"  | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        tipo=$(echo "$problem" | cut -d'|' -f2 | sed 's/^[[:space:]]*//')
+        summary.add "$pkg" "$tipo"
+    done
+    summary.show
+}
+
+# =============================================================================
+# FUNCIONES DE ACTUALIZACIÓN
+# =============================================================================
+sync_repos() {
+    log.info "Sincronizando repositorios..."
+    if command -v emaint > /dev/null; then
+        sudo emaint --auto sync
+    else
+        sudo emerge --sync
+    fi
+}
+
+# Detectar cambios en USE flags antes de actualizar
+detect_use_changes() {
+    log.info "Detectando cambios en USE flags que requieren recompilación..."
+
+    local packages_to_rebuild
+    packages_to_rebuild=$(sudo emerge -uDNp @world 2>&1 | grep -E "\[ebuild.*[UN].*\]" | awk '{print $4}' || true)
+
+    if [ -n "$packages_to_rebuild" ]; then
+        local count
+        count=$(echo "$packages_to_rebuild" | wc -l)
+        log.info "Se encontraron $count paquetes con cambios en USE flags que requieren recompilación:"
+        echo "$packages_to_rebuild" | head -20 | while read -r pkg; do
+            echo "  • $pkg"
+        done
+        if [ "$count" -gt 20 ]; then
+            echo "  • ... y $((count - 20)) más"
+        fi
+    else
+        log.info "No se detectaron cambios en USE flags"
+    fi
+}
+
+update_system() {
+    log.info "Actualizando sistema con detección de cambios en USE flags..."
+
+    local error_temp
+    error_temp=$(mktemp)
+    CLEANUP_FILES+=("$error_temp")
+    local emerge_opts="--keep-going --with-bdeps=y --complete-graph=y"
+
+    detect_use_changes
+
+    log.info "Resumen de actualización:"
+    sudo emerge -uDNp @world 2>&1 | head -50 | tee -a "$LOG_FILE"
+
+    read -p "¿Proceder con la actualización (recompilará paquetes con USE flags cambiadas)? (y/N): " -n 1 -r
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
+
+    # -N (newuse): recompila paquetes con USE flags cambiadas
+    sudo emerge -uDN @world $emerge_opts 2> >(tee -a "$error_temp" >&2) | tee -a "$LOG_FILE"
+
+    if [ -s "$error_temp" ]; then
+        log.warn "Se detectaron problemas durante la actualización"
+        analyze_and_collect_errors "$error_temp"
+    fi
+
+    rm -f "$error_temp"
+}
+
+# Recompilar después de depclean
+rebuild_after_depclean() {
+    log.info "Verificando si hay paquetes que necesitan recompilarse después de depclean..."
+
+    if command -v revdep-rebuild > /dev/null; then
+        local broken
+        broken=$(sudo revdep-rebuild -p 2>&1 | grep -c "Checking" || echo "0")
+        if [ "$broken" -gt 0 ]; then
+            log.warn "Se detectaron bibliotecas rotas después de depclean"
+            read -p "¿Reconstruir paquetes afectados? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                local error_temp
+                error_temp=$(mktemp)
+                CLEANUP_FILES+=("$error_temp")
+                sudo revdep-rebuild -i 2> >(tee -a "$error_temp" >&2) | tee -a "$LOG_FILE"
+                if [ -s "$error_temp" ]; then
+                    analyze_and_collect_errors "$error_temp"
+                fi
+                rm -f "$error_temp"
+            fi
+        fi
+    fi
+}
+
+clean_system() {
+    log.info "Limpiando dependencias huérfanas..."
+
+    log.info "Paquetes candidatos para depclean:"
+    sudo emerge --depclean -p | tee -a "$LOG_FILE"
+
+    read -p "¿Ejecutar depclean? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        local error_temp
+        error_temp=$(mktemp)
+        CLEANUP_FILES+=("$error_temp")
+        sudo emerge --depclean 2> >(tee -a "$error_temp" >&2) | tee -a "$LOG_FILE"
+        if [ -s "$error_temp" ]; then
+            analyze_and_collect_errors "$error_temp"
+        fi
+        rm -f "$error_temp"
+
+        rebuild_after_depclean
+    fi
+
+    read -p "¿Limpiar archivos fuente antiguos (distfiles)? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if command -v eclean-dist > /dev/null; then
+            log.info "Limpiando distfiles antiguos..."
+            sudo eclean-dist --destructive
+        else
+            log.warn "eclean-dist no instalado (app-portage/gentoolkit)"
+            log.info "Instalar con: sudo emerge --ask app-portage/gentoolkit"
+        fi
+    fi
+}
+
+handle_config_updates() {
+    log.info "Manejando actualizaciones de configuración..."
+    if command -v dispatch-conf > /dev/null; then
+        sudo dispatch-conf
+    else
+        sudo etc-update --automode -5
+    fi
+}
+
+verify_system() {
+    log.info "Verificación final del sistema..."
+
+    if command -v eselect > /dev/null; then
+        log.info "Perfil actual: $(eselect profile show 2>/dev/null)"
+    fi
+
+    log.info "Verificando consistencia de USE flags..."
+    local inconsistent
+    inconsistent=$(sudo emerge -uDNp @world 2>&1 | grep -c "new USE" || echo "0")
+    if [ "$inconsistent" -gt 0 ]; then
+        log.warn "Hay $inconsistent paquetes con USE flags inconsistentes"
+        PROBLEMS_LIST+=("multiple | use flags inconsistent - run emerge -uDN @world again")
+    fi
+
+    if command -v eselect > /dev/null && [ -f /var/lib/gentoo/news/news-gentoo.xml ]; then
+        local news_count
+        news_count=$(eselect news list 2>/dev/null | grep -c "^\[" || echo "0")
+        if [ "$news_count" -gt 0 ]; then
+            log.info "Hay $news_count news items pendientes"
+            read -p "¿Leer news? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                sudo eselect news read
+            fi
+        fi
+    fi
+}
+
+# =============================================================================
+# FUNCIÓN PRINCIPAL
+# =============================================================================
+main() {
+    while getopts :h opt; do
+        case $opt in
+            h) help.show; exit 0 ;;
+            ?) error.log "Opción no válida: -$OPTARG"; help.show; exit 1 ;;
+        esac
+    done
+
+    clear
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}       Gentoo OpenRC Update Script v1.0 - Con soporte USE flags${RESET}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
+    echo
+
+    check_network || exit 1
+    check_disk_space
+    check_emerge_running && exit 1
+
+    backup_world
+    sync_repos
+    update_system
+    handle_config_updates
+    clean_system
+    verify_system
+
+    print_sinthetic_summary
+
+    echo
+    info.log "Proceso completado"
+    if [ ${#PROBLEMS_LIST[@]} -gt 0 ]; then
+        message "${YELLOW}⚠Hay ${#PROBLEMS_LIST[@]} problema(s) pendiente(s)${RESET}"
+        message "${YELLOW}  Ejecuta: emerge -uDN @world para resolver USE flags inconsistentes${RESET}"
+    else
+        echo -e "${GREEN}✓ Sistema limpio - Sin problemas detectados${RESET}"
+    fi
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}Log: ${LOG_FILE}${RESET}"
+    echo -e "${GREEN}Backup world: ${WORLD_BACKUP}${RESET}"
+}
+
+main "$@"
+
+exit 0
