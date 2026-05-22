@@ -1,19 +1,17 @@
-# Contribuir a Bash Builder
+# Contributing to Bash Builder
 
-1. Hacer fork del repositorio.
-2. Crear una rama con nombre descriptivo.
-3. Hacer los cambios sobre los ficheros en `examples/`. El fichero `builder` en la raíz es el bundle generado y no se edita directamente.
-4. Reconstruir el builder y verificar que no se rompe:
+1. Fork the repository.
+2. Create a branch with a descriptive name.
+3. Make changes to the files under `examples/`. The `builder` file at the root is the generated bundle and should not be edited directly.
+4. Rebuild the builder and verify it still works:
    ```bash
    ./builder -e examples/builder -o ./builder
    ```
-5. Verificar con el ejemplo incluido:
+5. Verify with the included example:
    ```bash
    ./builder -e examples/listar.sh -o build/listar
    bash -n build/listar
    bash build/listar examples/
    ```
-6. Incluir en el commit los fuentes modificados.
-7. Abrir pull request explicando qué se cambió y por qué.
-
-El proyecto está bajo GPLv3. Cualquier contribución se entiende publicada bajo la misma licencia.
+6. Include the modified source files in your commit.
+7. Open a pull request describing what changed and why.

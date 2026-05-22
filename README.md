@@ -1,71 +1,71 @@
 # Bash Builder
 
-**Bash Builder** es una herramienta que convierte un script Bash con múltiples dependencias en un único fichero autocontenido. Ideal para distribuir scripts complejos sin preocuparse por rutas relativas, orden de carga o dependencias circulares.
+**Bash Builder** is a tool that bundles a Bash script and all its dependencies into a single self-contained file. Useful for distributing complex scripts without worrying about relative paths, load order, or circular dependencies.
 
-El propio `builder` está construido con este sistema: el punto de entrada está en [`examples/builder`](examples/builder) y la biblioteca de utilidades en [`examples/utils/`](examples/utils/).
+The `builder` itself is built with this system: the entrypoint lives in [`examples/builder`](examples/builder) and the utility library in [`examples/utils/`](examples/utils/).
 
 ---
 
 ## Quick Start
 
-Clonar el repositorio y generar un primer bundle:
+Clone the repository and generate your first bundle:
 
 ```bash
 git clone https://git.yawin.es/personal/bash-builder.git
 cd bash-builder
 
-# Empaquetar el script de ejemplo con sus dependencias
+# Bundle the example script with its dependencies
 ./builder -e examples/listar.sh -o ./listar
 
-# Ejecutar el bundle resultante
+# Run the resulting bundle
 bash ./listar -h
 bash ./listar ./
 ```
 
-El script generado `listar` es completamente autocontenido: incluye `help.sh` y `summary.sh` (y sus dependencias) resueltos y sin duplicados. No necesita los fuentes originales para ejecutarse.
+The generated `listar` script is fully self-contained: it includes `help.sh` and `summary.sh` (and their dependencies), deduplicated. It does not need the original sources to run.
 
-Para una salida más compacta, añadir `-m`:
+For a more compact output, add `-m`:
 
 ```bash
 ./builder -e examples/listar.sh -o ./listar -m
 ```
 
-La reducción es de ~31% (320 → 220 líneas) manteniendo la misma semántica.
+That yields ~30% reduction (354 → 245 lines) with identical semantics.
 
 ---
 
-## Cómo funciona
+## How it works
 
-1. Toma un script de entrada (el *entrypoint*) y lo recorre línea por línea.
-2. Cuando encuentra una instrucción `source <fichero>` o `. <fichero>`, resuelve la ruta real del fichero referenciado y lo procesa recursivamente.
-3. Cada fichero se inyecta en la salida una sola vez: las inclusiones duplicadas se marcan como `[SKIPPED]`.
-4. El shebang del entrypoint se coloca al principio absoluto de la salida; los shebangs del resto de ficheros se descartan automáticamente.
-5. Las líneas que no son `source` se copian tal cual.
-6. El resultado se escribe en el fichero de salida, listo para ejecutar.
+1. Takes an entrypoint script and processes it line by line.
+2. When it finds a `source <file>` or `. <file>` instruction, it resolves the actual path of the referenced file and processes it recursively.
+3. Each file is injected into the output exactly once: duplicate inclusions are logged as `[SKIPPED]`.
+4. The shebang from the entrypoint is placed at the very top of the output; shebangs from all other files are discarded.
+5. Non-`source` lines are copied as-is.
+6. The result is written to the output file, ready to execute.
 
 ---
 
-## Uso
+## Usage
 
 ```
-builder [OPCIONES]
+builder [OPTIONS]
 ```
 
-| Opción | Descripción |
+| Option | Description |
 |--------|-------------|
-| `-h` | Muestra la ayuda |
-| `-e <ruta>` | Script de entrada (el que contiene los `source`) |
-| `-o <ruta>` | Fichero de salida (el bundle generado) |
-| `-m` | Minifica la salida |
+| `-h` | Show help |
+| `-e <path>` | Entrypoint script (the one containing the `source` calls) |
+| `-o <path>` | Output file (the generated bundle) |
+| `-m` | Minify the output |
 
-### Ejemplos incluidos
+### Included examples
 
-El proyecto incluye dos scripts de ejemplo empaquetables:
+The project ships two bundleable example scripts:
 
-| Script | Utilidades usadas | Complejidad |
+| Script | Utilities used | Complexity |
 |---|---|---|
-| `examples/listar.sh` | `help.sh`, `summary.sh` | Básico, lista ficheros y directorios con filtros `-f`/`-d` |
-| `examples/builder` | `help.sh`, `minify.sh` | Avanzado, es el propio builder |
+| `examples/listar.sh` | `help.sh`, `summary.sh` | Basic — lists files and directories with `-f`/`-d` filters |
+| `examples/builder` | `help.sh`, `minify.sh` | Advanced — the builder itself |
 
 ```bash
 ./builder -e examples/listar.sh -o ./listar
@@ -74,74 +74,63 @@ El proyecto incluye dos scripts de ejemplo empaquetables:
 
 ---
 
-## Minificación
+## Minification
 
-Al usar `-m`, el builder aplica una serie de transformaciones sobre la salida:
+When `-m` is used, the builder applies a set of transformations to the output:
 
-| Transformación | Antes | Después |
+| Transformation | Before | After |
 |---|---|---|
-| Sin comentarios de línea completa | `# esto es un comentario` | (eliminado) |
-| Sin líneas vacías | Líneas en blanco | (eliminadas) |
-| Sin keyword `function` | `function foo() {` | `foo(){` |
-| Sin espacios en `\|\|`, `&&`, `\|` | `cmd \|\| other` | `cmd\|\|other` |
-| Sin espacio antes de `;` | `cmd ; other` | `cmd; other` |
-| Redirecciones compactas | `> /dev/null` | `>/dev/null` |
-| Espacios múltiples colapsados | `local   var` | `local var` |
+| Strip full-line comments | `# this is a comment` | (removed) |
+| Strip blank lines | blank lines | (removed) |
+| Remove `function` keyword | `function foo() {` | `foo(){` |
+| Collapse spaces around `\|\|`, `&&`, `\|` | `cmd \|\| other` | `cmd\|\|other` |
+| Remove space before `;` | `cmd ; other` | `cmd; other` |
+| Compact redirections | `> /dev/null` | `>/dev/null` |
+| Collapse multiple spaces | `local   var` | `local var` |
 
-La salida minificada es sintácticamente equivalente al original. Reducciones observadas:
+Minified output is syntactically equivalent to the original. Observed reductions:
 
-| Ejemplo | Normal | Minificado | Reducción |
+| Example | Normal | Minified | Reduction |
 |---|---|---|---|
-| `listar.sh` | 320 líneas | 220 líneas | ~31% |
-| `builder` | 434 líneas | 266 líneas | ~39% |
+| `listar.sh` | 354 lines | 245 lines | ~30% |
+| `builder` | 414 lines | 277 lines | ~33% |
+| `gentoo-smart-updater` | 653 lines | 471 lines | ~27% |
 
 ---
 
-## Estructura del proyecto
+## Project structure
 
 ```
 bash-builder/
-├── builder                 # El bundle autocontenido (ejecutable)
+├── builder                 # Self-contained bundle (executable)
 ├── examples/
-│   ├── builder             # Fuente del builder (entrypoint)
-│   ├── listar.sh           # Ejemplo básico (help + summary)
-│   └── utils/              # Biblioteca de utilidades compartidas
-│       ├── tools.sh        # safe_export, colores
-│       ├── help.sh         # Sistema de ayuda (-h)
-│       ├── log.sh          # Funciones de log
-│       ├── datastore.sh    # Almacén clave-valor en memoria
-│       ├── minify.sh       # Minificador interno
-│       ├── summary.sh      # Tablas resumen formateadas
-│       └── timer.sh        # Temporizador
-└── LICENSE                 # GPLv3
+│   ├── builder             # Builder source (entrypoint)
+│   ├── listar.sh           # Basic example (help + summary)
+│   └── utils/              # Shared utility library
+│       ├── tools.sh        # safe_export, colors
+│       ├── help.sh         # Help system (-h)
+│       ├── log.sh          # Logging functions
+│       ├── datastore.sh    # In-memory key-value store
+│       ├── minify.sh       # Internal minifier
+│       ├── summary.sh      # Formatted summary tables
+│       └── timer.sh        # Timer
+└── LICENSE
 ```
 
 ---
 
-## Cómo reconstruir el builder
+## Rebuilding the builder
 
-Si se modifican los fuentes en `examples/`, regenerar el bundle:
+After modifying sources under `examples/`, regenerate the bundle:
 
 ```bash
 ./builder -e examples/builder -o ./builder
 ```
 
-El builder puede reconstruirse a sí mismo. Para probar sin sobrescribir, crear y usar el directorio `build/`:
+The builder can rebuild itself. To test without overwriting, use a `build/` directory:
 
 ```bash
 mkdir -p build
 ./builder -e examples/builder -o build/builder
 ```
-
----
-
-## Licencia
-
-GNU General Public License v3.0. Consulta el fichero [LICENSE](LICENSE) para más detalles.
-
----
-
-## Autor
-
-Miguel Albors Iruretagoyena (Yawin)
 
