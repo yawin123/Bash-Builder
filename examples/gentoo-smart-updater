@@ -157,6 +157,23 @@ print_sinthetic_summary() {
 # =============================================================================
 # FUNCIONES DE ACTUALIZACIÓN
 # =============================================================================
+rebuild_modules() {
+    log.info "Reconstruyendo módulos del kernel (nvidia, etc.)..."
+    local error_temp
+    error_temp=$(mktemp)
+    CLEANUP_FILES+=("$error_temp")
+
+    if sudo emerge @module-rebuild 2> >(tee -a "$error_temp" >&2) | tee -a "$LOG_FILE"; then
+        log.info "Módulos reconstruidos correctamente"
+    else
+        log.warn "Hubo problemas al reconstruir módulos"
+        analyze_and_collect_errors "$error_temp"
+        PROBLEMS_LIST+=("kernel-modules|module-rebuild failed - check manually")
+    fi
+
+    rm -f "$error_temp"
+}
+
 sync_repos() {
     log.info "Sincronizando repositorios..."
     if command -v emaint > /dev/null; then
@@ -337,6 +354,7 @@ main() {
     backup_world
     sync_repos
     update_system
+    rebuild_modules
     handle_config_updates
     clean_system
     verify_system
